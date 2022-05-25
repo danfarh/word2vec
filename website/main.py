@@ -1,18 +1,17 @@
 import pickle
-from tensorflow.keras.models import load_model
+import numpy as np
 import plotly.graph_objs as go
 import streamlit as st
 from sklearn.decomposition import PCA
+from sklearn.metrics.pairwise import euclidean_distances
 
 
-# load model
-model = load_model('data/model_skipgram.h5')
+# load embedding weights
+with open('data/embedding_weights.h5', 'rb') as f:
+    embedding_weights = pickle.load(f)
 # load tokenizer
 with open('data/tokenizer.h5', 'rb') as f:
     tokenizer = pickle.load(f)
-
-# Get embedding layer weights
-embedding_weights = model.get_weights()[0]
 
 # Dimention Reduction -> PCA
 three_dim = PCA(random_state=0).fit_transform(embedding_weights)[:, :3]
@@ -21,7 +20,13 @@ print(three_dim.shape)
 # unique words
 words = [word for word in tokenizer.word_index.keys()]
 
-# Frontend
+# Get most similar words
+def get_most_similarity(word, weights=three_dim, tokenizer=tokenizer, n=20):
+    distance_matrix = euclidean_distances(weights)
+    word_to_sequences = tokenizer.texts_to_sequences([word])[0][0]
+    index = np.argsort(distance_matrix[word_to_sequences])[:n]
+    return index
+
 st.sidebar.subheader('Word Embeddings')
 one_or_all_words = st.sidebar.selectbox(
     'Watch all words or one word map? ', ('ONE_WORD', 'ALL_WORDS'))
@@ -29,7 +34,14 @@ one_or_all_words = st.sidebar.selectbox(
 if one_or_all_words == 'ONE_WORD':
     word_input = st.sidebar.text_input("Enter a word: ", '')
 
+    if not word_input:
+        word_input = 'مه'
 
+    word_index = get_most_similarity(word_input)
+    indexes = [index for index in word_index]
+    #print(indexes)
+
+# Frontend
 color = 'blue'
 quiver = go.Cone(
     x=[0, 0, 0],
@@ -46,43 +58,42 @@ data = [quiver]
 
 # One word plot
 if one_or_all_words == 'ONE_WORD':
-    count = 0
-    trace = go.Scatter3d(
-        x=three_dim[count:count+20, 0],
-        y=three_dim[count:count+20, 1],
-        z=three_dim[count:count+20, 2],
-        text=words[count:count+20],
-        name=word_input,
-        textposition="top center",
-        textfont_size=30,
-        mode='markers+text',
-        marker={
-            'size': 10,
-            'opacity': 0.8,
-            'color': 2
-        }
-    )
-    data.append(trace)
-    count = count+20
-    # Configure the layout
-    layout = go.Layout(
-        margin={'l': 0, 'r': 0, 'b': 0, 't': 0},
-        showlegend=True,
-        legend=dict(
-            x=1,
-            y=0.5,
+    for i in range(len(indexes)):
+        trace = go.Scatter3d(
+            x=three_dim[indexes[i]:indexes[i]+1, 0],
+            y=three_dim[indexes[i]:indexes[i]+1, 1],
+            z=three_dim[indexes[i]:indexes[i]+1, 2],
+            text=words[indexes[i]:indexes[i]+1],
+            name=word_input,
+            textposition="top center",
+            textfont_size=30,
+            mode='markers+text',
+            marker={
+                'size': 10,
+                'opacity': 0.8,
+                'color': 2
+            }
+        )
+        data.append(trace)
+        # Configure the layout
+        layout = go.Layout(
+            margin={'l': 0, 'r': 0, 'b': 0, 't': 0},
+            showlegend=True,
+            legend=dict(
+                x=1,
+                y=0.5,
+                font=dict(
+                    family="Courier New",
+                    size=25,
+                    color="black"
+                )),
             font=dict(
-                family="Courier New",
-                size=25,
-                color="black"
-            )),
-        font=dict(
-            family=" Courier New ",
-            size=15),
-        autosize=False,
-        width=1000,
-        height=1000
-    )
+                family=" Courier New ",
+                size=15),
+            autosize=False,
+            width=1000,
+            height=1000
+        )
     # draw plot
     plot_figure = go.Figure(data=data, layout=layout)
     st.plotly_chart(plot_figure)
@@ -103,7 +114,7 @@ if one_or_all_words == 'ALL_WORDS':
         marker={
             'size': 10,
             'opacity': 1,
-            'color': 'black'
+            'color': 'green'
         }
     )
     data.append(trace_input)
@@ -117,7 +128,7 @@ if one_or_all_words == 'ALL_WORDS':
             font=dict(
                 family="Courier New",
                 size=25,
-                color="black"
+                color="green"
             )),
         font=dict(
             family=" Courier New ",
